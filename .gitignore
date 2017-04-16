@@ -1,0 +1,13 @@
+#win32
+
+csharp-client/bin/*
+
+csharp-client/obj/*
+
+csharp-server/bin/*
+
+csharp-server/obj/*
+
+
+
+
