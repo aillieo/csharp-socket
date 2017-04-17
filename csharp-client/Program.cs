@@ -2,6 +2,8 @@
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace csharp_client
 {
@@ -10,13 +12,13 @@ namespace csharp_client
         static void Main(string[] args)
         {
 
-            CommunicationManager cm = CommunicationManager.instance;
-            bool ret = cm.Init();
+            CommunicationManager.instance.Init();
+            UIDisplayer.instance.Init();
 
             while(true)
             {
-                string s = System.Console.ReadLine();
-                UIDisplayer.instance.HandleInput(s);
+                ConsoleKeyInfo input = System.Console.ReadKey(true);
+                UIDisplayer.instance.HandleInput((int)(input.KeyChar));
             }
 
         }
@@ -56,6 +58,26 @@ namespace csharp_client
         }
 
 
+        public void Receive(byte[] data, int bytes)
+        {
+            int len = 0;
+            len = BitConverter.ToInt32(data, 0);
+	        Message msg = new Message();
+            byte[] bMsg = new byte[len];
+            Array.Copy(data,4,bMsg,0,len);
+            msg.ParseFromBytes(bMsg, len);
+	        HandleMessage(msg );
+        }
+
+        private void HandleMessage(Message msg)
+        {
+            if(msg.Type == 0)
+	        {
+		        UIDisplayer.instance.AppendMessage(msg.Content);
+	        }
+
+        }
+
     }
 
     class SocketClient
@@ -73,6 +95,13 @@ namespace csharp_client
             {
                 _socket.Connect(new IPEndPoint(ip, port));
                 //Console.WriteLine("connected");
+
+
+                Thread tRecv = new Thread(new ThreadStart(ReceiveMsg));
+                tRecv.IsBackground = true;
+                tRecv.Start();
+
+
                 return true;
             }
             catch
@@ -80,6 +109,27 @@ namespace csharp_client
                 Console.WriteLine("connect fail");
                 return false;
             }
+
+        }
+
+        void ReceiveMsg()
+        {
+            byte[] recvBytes = new byte[csharp_client.Config.buffer_max_length];
+            int bytes;
+            while (true)
+            {
+                bytes = _socket.Receive(recvBytes, recvBytes.Length, 0);
+                if(bytes > 0)
+                {
+                    CommunicationManager.instance.Receive(recvBytes, recvBytes.Length);
+                }
+                if (bytes < 0)
+                {
+                    break;
+                }
+            }
+
+            _socket.Close();
 
         }
 
@@ -93,19 +143,122 @@ namespace csharp_client
 
     class UIDisplayer
     {
+        
         private UIDisplayer() { }
         public static readonly UIDisplayer instance = new UIDisplayer();
 
+        private bool _needRefresh = true;
+        Queue<string> _messagesWithFormat = new Queue<string>();
+        List<int> _input = new List<int>();
 
 
-
-        public void HandleInput(string str)
+        public bool Init()
         {
-             CommunicationManager.instance.SendMessage(0, str);
+            Console.CursorVisible = false;
+	        Thread tDisplay = new Thread(new ThreadStart(Display));
+            tDisplay.IsBackground = false;
+            tDisplay.Start();
+            
+            return true;
+        }
+
+        public void HandleInput(int input)
+        {
+            Mutex mutex = new Mutex(true, "ui");
+            if(input == 8 && _input.Count != 0) 
+            {
+		        _input.RemoveAt(_input.Count-1);
+	        } 
+	        else if(input == 13 && _input.Count != 0)
+	        {
+		        int count = _input.Count;
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < count; i++)
+                {
+                    sb.Append((char)_input[i]);
+                }
+                string str = sb.ToString();
+                CommunicationManager.instance.SendMessage(0, str);
+                _input.Clear();
+    	    }
+	        else if(input != 8){
+		        _input.Add(input);
+	        }
+	        _needRefresh = true;
         }
 
 
+        private void Display()
+        {
 
+            while (true)
+            {
+                Mutex mutex = new Mutex(true, "ui");
+                if (_needRefresh)
+                {
+                    ClearScreen();
+                    DisplayMessage();
+                    Seperate();
+                    DisplayInput();
+                    _needRefresh = false;
+                }
+                
+            }
+
+        }
+
+        void ClearScreen()
+        {
+            System.Console.Clear();
+
+        }
+
+        void DisplayMessage()
+        {
+            
+            foreach (var msgStr in _messagesWithFormat)
+            {
+                Console.WriteLine(msgStr);
+            }
+        }
+
+        void Seperate()
+        {
+            int width = 30;
+            while (width > 0)
+            {
+                System.Console.Write("-");
+                width--;
+            }
+            System.Console.WriteLine("");
+
+        }
+
+        void DisplayInput()
+        {
+            int count = _input.Count;
+            for (int i = 0; i < count; i++)
+            {
+                Console.Write((char)_input[i]);
+            }
+            Console.WriteLine("");
+        }
+
+
+        public void AppendMessage(string str)
+        {
+
+            Mutex mutex = new Mutex(true, "ui");
+
+            if (_messagesWithFormat.Count > csharp_client.Config.max_message_amount_display)
+            {
+                _messagesWithFormat.Dequeue();
+            }
+            _messagesWithFormat.Enqueue(str);
+
+            _needRefresh = true;
+
+        }
 
     }
 }
