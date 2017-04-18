@@ -28,12 +28,12 @@ namespace csharp_client
         public int serializeToBytes(out byte[] data)
         {
             _length = 4 + (int)_content.Length;
-            data = new byte[_length+1];
+            data = new byte[_length];
             byte[] bType = BitConverter.GetBytes(_type);
             Array.Copy(bType, 0, data, 0, 4);
             byte[] bContent = System.Text.Encoding.Default.GetBytes(_content);
             Array.Copy(bContent, 0, data, 4, _length - 4);
-            data[_length] = (byte)('\0');
+            //data[_length] = (byte)('\0');
             return _length;
         }
 

@@ -146,6 +146,7 @@ namespace csharp_client
         
         private UIDisplayer() { }
         public static readonly UIDisplayer instance = new UIDisplayer();
+        readonly object msgQueueLock = new object();
 
         private bool _needRefresh = true;
         Queue<string> _messagesWithFormat = new Queue<string>();
@@ -164,27 +165,30 @@ namespace csharp_client
 
         public void HandleInput(int input)
         {
-            Mutex mutex = new Mutex(true, "ui");
-            if(input == 8 && _input.Count != 0) 
+            lock (msgQueueLock)
             {
-		        _input.RemoveAt(_input.Count-1);
-	        } 
-	        else if(input == 13 && _input.Count != 0)
-	        {
-		        int count = _input.Count;
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < count; i++)
+                if (input == 8 && _input.Count != 0)
                 {
-                    sb.Append((char)_input[i]);
+                    _input.RemoveAt(_input.Count - 1);
                 }
-                string str = sb.ToString();
-                CommunicationManager.instance.SendMessage(0, str);
-                _input.Clear();
-    	    }
-	        else if(input != 8){
-		        _input.Add(input);
-	        }
-	        _needRefresh = true;
+                else if (input == 13 && _input.Count != 0)
+                {
+                    int count = _input.Count;
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < count; i++)
+                    {
+                        sb.Append((char)_input[i]);
+                    }
+                    string str = sb.ToString();
+                    CommunicationManager.instance.SendMessage(0, str);
+                    _input.Clear();
+                }
+                else if (input != 8)
+                {
+                    _input.Add(input);
+                }
+                _needRefresh = true;
+            }
         }
 
 
@@ -193,7 +197,7 @@ namespace csharp_client
 
             while (true)
             {
-                Mutex mutex = new Mutex(true, "ui");
+                
                 if (_needRefresh)
                 {
                     ClearScreen();
@@ -215,11 +219,14 @@ namespace csharp_client
 
         void DisplayMessage()
         {
-            
-            foreach (var msgStr in _messagesWithFormat)
+            lock (msgQueueLock)
             {
-                Console.WriteLine(msgStr);
+                foreach (var msgStr in _messagesWithFormat)
+                {
+                    Console.WriteLine(msgStr);
+                }
             }
+
         }
 
         void Seperate()
@@ -247,18 +254,16 @@ namespace csharp_client
 
         public void AppendMessage(string str)
         {
-
-            Mutex mutex = new Mutex(true, "ui");
-
-            if (_messagesWithFormat.Count > csharp_client.Config.max_message_amount_display)
+            lock (msgQueueLock)
             {
-                _messagesWithFormat.Dequeue();
+                if (_messagesWithFormat.Count > csharp_client.Config.max_message_amount_display)
+                {
+                    _messagesWithFormat.Dequeue();
+                }
+                _messagesWithFormat.Enqueue(str);
+
+                _needRefresh = true;
             }
-            _messagesWithFormat.Enqueue(str);
-
-            _needRefresh = true;
-
         }
-
     }
 }
