@@ -64,14 +64,10 @@ namespace csharp_client
         }
 
 
-        public void Receive(byte[] data, int bytes)
+        public void Receive(byte[] data, int len)
         {
-            int len = 0;
-            len = BitConverter.ToInt32(data, 0);
 	        Message msg = new Message();
-            byte[] bMsg = new byte[len];
-            Array.Copy(data,4,bMsg,0,len);
-            msg.ParseFromBytes(bMsg, len);
+            msg.ParseFromBytes(data, len);
 	        HandleMessage(msg );
         }
 
@@ -120,19 +116,36 @@ namespace csharp_client
 
         void ReceiveMsg()
         {
+            byte[] lenBytes = new byte[4];
             byte[] recvBytes = new byte[csharp_client.Config.buffer_max_length];
             int bytes;
             while (true)
             {
-                bytes = _socket.Receive(recvBytes, recvBytes.Length, 0);
+                int len = 0;
+                bytes = _socket.Receive(lenBytes, 4, 0);
                 if(bytes > 0)
                 {
-                    CommunicationManager.instance.Receive(recvBytes, recvBytes.Length);
+                    len = BitConverter.ToInt32(lenBytes, 0);
                 }
                 if (bytes < 0)
                 {
                     break;
                 }
+
+
+                if (len > 0)
+                {
+                    bytes = _socket.Receive(recvBytes, len , 0);
+                    CommunicationManager.instance.Receive(recvBytes, len);
+
+                }
+                if (bytes < 0)
+                {
+                    break;
+                }
+
+
+
             }
 
             _socket.Close();
