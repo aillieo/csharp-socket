@@ -12,7 +12,13 @@ namespace csharp_client
         static void Main(string[] args)
         {
 
-            CommunicationManager.instance.Init();
+            bool connected = CommunicationManager.instance.Init();
+            if (!connected)
+            {
+                Console.WriteLine("Cannot connect to server...");
+                Console.ReadKey();
+                return;
+            }
             UIDisplayer.instance.Init();
 
             while(true)
@@ -36,7 +42,7 @@ namespace csharp_client
 
             _socketClient = new SocketClient();
             bool ret = _socketClient.ConnectServer();
-            return true;
+            return ret;
         }
 
         public bool SendMessage(int type, string str )
@@ -156,8 +162,9 @@ namespace csharp_client
         public bool Init()
         {
             Console.CursorVisible = false;
+            DisplayInput();
 	        Thread tDisplay = new Thread(new ThreadStart(Display));
-            tDisplay.IsBackground = false;
+            tDisplay.IsBackground = true;
             tDisplay.Start();
             
             return true;
@@ -200,11 +207,11 @@ namespace csharp_client
                 
                 if (_needRefresh)
                 {
+                    _needRefresh = false;
                     ClearScreen();
                     DisplayMessage();
                     Seperate();
                     DisplayInput();
-                    _needRefresh = false;
                 }
                 
             }
